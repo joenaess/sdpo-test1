@@ -1165,6 +1165,12 @@ def compute_self_distillation_loss(
         log_ratio = student_log_probs - teacher_log_probs
         per_token_loss = log_ratio.detach() * student_log_probs
 
+        import os
+        if os.environ.get("USE_GATED_SDPO", "0") == "1":
+            student_probs = torch.exp(student_log_probs)
+            routing_mask = student_probs < 0.90
+            per_token_loss = per_token_loss * routing_mask.float()
+            
     is_clip = self_distillation_config.is_clip
     if is_clip is not None:
         if old_log_probs is None:
