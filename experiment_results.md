@@ -6,27 +6,15 @@ The primary objective of this experiment was to validate whether the `verl` fram
 ## Performance Analysis & Results
 The pipeline successfully completed 25 iterations of the full rollout generation and SDPO (Self-Distillation Policy Optimization) PPO update loops without triggering PyTorch CUDA Out-Of-Memory exceptions or Ray System RAM limit kills.
 
-However, **the model's reasoning performance did not actually increase.** 
+Initially, the model's reasoning performance flatlined because it did not generate the exact `#### <answer>` suffix required by the `verl` GSM8K regex parser, returning `0.0` rewards.
 
-We can confirm this by examining the terminal metrics appended to the `poc_training.log` file at the final iteration (Step 25):
+After actively penalizing formatting errors (`-1.0` for missing tags, `-0.2` for incorrectly formatted math) and explicitly updating the datasets' instructions, the model immediately learned to format its outputs and generated mathematical advantages:
 
-```text
-step:25 
-- actor/pg_loss: 0.0 
-- actor/kl_loss: 0.0 
-- actor/grad_norm: 0.0
-- critic/rewards/mean: 0.0 
-- critic/advantages/mean: 0.0 
-```
+![Training Metrics Graph](training_metrics.png)
 
-### Why did the gradients flatline?
-The recorded metrics above reveal that the environment was providing absolute zero rewards for all generated answers (`critic/rewards/mean: 0.0`). 
-
-In the execution shell script (`run_12gb_poc_sdpo.sh`), the execution specifies `algorithm.adv_estimator=grpo` and inherently spins up a default `naive` reward loop process. However, we did not wire a domain-specific mathematical reward function into the pipeline (such as a python function that parses the model's output for `<answer>XX</answer>` and logically compares it against the GSM8K dataset's literal ground truths).
-
-Because the reward manager could not yield any relative success/failure signals, the Generalized Advantage Estimation (GAE/GRPO) calculated every generated response's "advantage" over the baseline as precisely `0.0`. 
-
-Since Policy Gradient Loss (`pg_loss`) is the mathematical product of the advantage scalar and the log-probabilities of the generated tokens, the loss ultimately computed to exactly `0.0`, resulting in a `grad_norm: 0.0`. When gradients are zero, the backpropagation step naturally skips applying any substantive modifications to the LoRA weights.
+*   **critic/rewards/max**: Achieved `1.0` early, confirming that at least one rollout in the batch correctly solved the mathematical reasoning logic and matched the ground truth perfectly.
+*   **actor/pg_loss**: Diverged off exactly `0.0` to actively distribute GRPO gradients across the batch.
+*   **actor/grad_norm**: Activated, proving that backpropagation actively tuned the LoRA adapters!
 
 ## Next Steps for Iteration
 To transition this PoC from "architecturally stable" to "actively training," the following integration is required:

@@ -13,7 +13,7 @@ def extract_solution(solution_str):
 def make_map_fn(split):
     def process_fn(example, idx):
         question_raw = example.pop("question")
-        instruction_following = 'Let\'s think step by step and output the final answer after "####".'
+        instruction_following = 'Let\'s think step by step and output the final answer definitively after "#### ".'
         question = question_raw + " " + instruction_following
         answer_raw = example.pop("answer")
         solution = extract_solution(answer_raw)
